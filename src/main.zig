@@ -136,6 +136,29 @@ pub fn main() !void {
 
     queue.WriteBuffer(vertex_buffer, 0, f32, &vertex_data);
 
+    const window_uniform_buffer = try device.CreateBuffer(&.{
+        .label = .fromSlice("window size"),
+        .usage = @intFromEnum(wgpu.BufferUsage.Uniform) | @intFromEnum(wgpu.BufferUsage.CopyDst),
+        .size = 2 * @sizeOf(f32),
+    });
+    defer window_uniform_buffer.release();
+
+    queue.WriteBuffer(window_uniform_buffer, 0, f32, &.{ WINDOW_WIDTH, WINDOW_HEIGHT });
+
+    const bind_group = try device.CreateBindGroup(&.{
+        .label = .fromSlice("bind group"),
+        .layout = try render_pipeline.GetBindGroupLayout(0),
+        .entryCount = 1,
+        .entries = &[1]wgpu.BindGroupEntry {
+            wgpu.BindGroupEntry {
+                .binding = 0,
+                .offset = 0,
+                .size = window_uniform_buffer.getSize(),
+                .buffer = window_uniform_buffer
+            }
+        }
+    });
+    defer bind_group.release();
 
 
     while (!window.ShouldClose()) {
@@ -177,6 +200,7 @@ pub fn main() !void {
 
             rend_pass_enc.setPipeline(render_pipeline);
             rend_pass_enc.setVertexBuffer(0, vertex_buffer, 0);
+            rend_pass_enc.setBindGroup(0, bind_group, &.{});
             rend_pass_enc.draw(vertex_data.len / 2, 1, 0, 0);
             rend_pass_enc.end();
 
