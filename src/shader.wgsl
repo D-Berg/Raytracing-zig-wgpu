@@ -21,12 +21,39 @@ struct Ray {
     dir: vec3f
 }
 
+
 fn getRayColor(ray: Ray) -> vec3f {
+
+    
+    let sphere = Sphere(vec3f(0.0, 0.0, -1.0), 0.5);
+    if hitSphere(sphere, ray) {
+        return vec3f(1.0, 0.0, 0.0);
+    }
 
     let unit_dir = normalize(ray.dir);
 
     let a = 0.5 * (unit_dir.y + 1.0);
     return (1.0 - a) * vec3f(1.0, 1.0, 1.0) + a * vec3f(0.5, 0.7, 1.0);
+
+}
+
+
+struct Sphere {
+    center: vec3f,
+    radius: f32
+}
+
+fn hitSphere(sphere: Sphere, ray: Ray) -> bool {
+
+    let oc = sphere.center - ray.orig;
+
+    let a = dot(ray.dir, ray.dir);
+    let b = -2.0 * dot(ray.dir, oc);
+    let c = dot(oc, oc) - sphere.radius * sphere.radius;
+
+    let discriminant = b * b - 4.0 * a * c;
+
+    return discriminant >= 0;
 
 }
 
