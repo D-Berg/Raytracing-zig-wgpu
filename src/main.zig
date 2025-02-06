@@ -73,9 +73,11 @@ pub fn main() !void {
     const device = try adapter.RequestDevice(null);
     defer device.release();
 
+    const format = surface.GetPreferredFormat(adapter);
+    log.debug("using format: {s}", .{@tagName(format)});
     const surface_conf = wgpu.SurfaceConfiguration {
         .device = device,
-        .format = surface.GetPreferredFormat(adapter),
+        .format = format,
         .width = WINDOW_WIDTH,
         .height = WINDOW_HEIGHT,
         .usage = .RenderAttachment,
