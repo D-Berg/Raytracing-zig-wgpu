@@ -12,8 +12,8 @@ const shader_code = @embedFile("shader.wgsl");
 
 const ASPECT_RATIO: f32 = 16.0 / 9.0;
 
-const WINDOW_WIDTH = 800;
-const WINDOW_HEIGHT = WINDOW_WIDTH / ASPECT_RATIO;
+const WINDOW_WIDTH = 1080;
+const WINDOW_HEIGHT = @divTrunc(WINDOW_WIDTH, ASPECT_RATIO);
 
 // Packed: Fields remain in the order declared, least to most significant.
 const Position = packed struct { x: f32, y: f32, z: f32 };
@@ -29,14 +29,21 @@ const Camera = packed struct {
     view_port: ViewPort,
 };
 
+
+const Sphere = packed struct {
+    center: Position,
+    radius: f32,
+};
+
 pub fn main() !void {
     const v_height = 2.0;
+    const v_width = v_height * WINDOW_WIDTH / WINDOW_HEIGHT;
 
     const camera = Camera {
         .center = .{ .x = 0, .y = 0, .z = 0 },
         .focal_length = 1,
         .view_port = .{ 
-            .width = v_height * WINDOW_WIDTH / WINDOW_HEIGHT, 
+            .width = v_width, 
             .height = v_height 
         },
     };
@@ -47,6 +54,9 @@ pub fn main() !void {
     glfw.Window.hint(.{ .resizable = false, .client_api = .NO_API });
     log.debug("aspect ratio = {}", .{ASPECT_RATIO});
     log.debug("window: width = {}, height = {}", .{WINDOW_WIDTH, WINDOW_HEIGHT});
+    log.debug("viewport: width = {}, height = {}", .{
+        camera.view_port.width, camera.view_port.height
+    });
     const window = try glfw.Window.Create(WINDOW_WIDTH, WINDOW_HEIGHT, "Raytracing!");
     defer  window.destroy();
 
@@ -184,12 +194,42 @@ pub fn main() !void {
     defer camera_uniform_buffer.release();
 
     queue.WriteBuffer(camera_uniform_buffer, 0, Camera, &.{ camera });
+    
+
+    const spheres_data = [_]Sphere {
+        Sphere {
+            .center = .{ .x = 0, .y = -100.5, .z = -1},
+            .radius = 100
+        },
+        Sphere { 
+            .center = .{ .x = 0, .y = 0, .z = -1 }, 
+            .radius = 0.5
+        },
+    };
+
+    const spheres_buffer = try device.CreateBuffer(&.{
+        .label = .fromSlice("spheres"),
+        .usage = @intFromEnum(wgpu.BufferUsage.Storage) | @intFromEnum(wgpu.BufferUsage.CopyDst),
+        .size = @sizeOf(@TypeOf(spheres_data)),
+    });
+    defer spheres_buffer.release();
+
+    queue.WriteBuffer(spheres_buffer, 0, Sphere, &spheres_data);
+
+    const sphere_len_buffer =  try device.CreateBuffer(&.{
+        .label = .fromSlice("sphere len"),
+        .usage = @intFromEnum(wgpu.BufferUsage.Uniform) | @intFromEnum(wgpu.BufferUsage.CopyDst),
+        .size = @sizeOf(@TypeOf(spheres_data)),
+    });
+    defer sphere_len_buffer.release();
+
+    queue.WriteBuffer(sphere_len_buffer, 0, u32, &.{ @intCast(spheres_data.len) });
 
     const bind_group = try device.CreateBindGroup(&.{
         .label = .fromSlice("bind group"),
         .layout = try render_pipeline.GetBindGroupLayout(0),
-        .entryCount = 2,
-        .entries = &[2]wgpu.BindGroupEntry {
+        .entryCount = 4,
+        .entries = &[4]wgpu.BindGroupEntry {
             wgpu.BindGroupEntry {
                 .binding = 0,
                 .offset = 0,
@@ -202,7 +242,20 @@ pub fn main() !void {
                 .offset = 0,
                 .size = camera_uniform_buffer.getSize(),
                 .buffer = camera_uniform_buffer
-            }
+            },
+            wgpu.BindGroupEntry {
+                .binding = 2,
+                .offset = 0,
+                .size = spheres_buffer.getSize(),
+                .buffer = spheres_buffer
+            },
+
+            wgpu.BindGroupEntry {
+                .binding = 3,
+                .offset = 0,
+                .size = sphere_len_buffer.getSize(),
+                .buffer = sphere_len_buffer
+            },
         }
     });
     defer bind_group.release();

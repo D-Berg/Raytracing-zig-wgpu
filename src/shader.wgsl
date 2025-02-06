@@ -1,6 +1,10 @@
 
 @group(0) @binding(0) var<uniform> window_size: vec2f;
 @group(0) @binding(1) var<uniform> camera: Camera;
+@group(0) @binding(2) var<storage> spheres: array<Sphere>;
+@group(0) @binding(3) var<uniform> spheres_len: u32;
+
+const inf: f32 = 3.4028235e+38;
 
 struct Camera {
     center: vec3f,
@@ -27,43 +31,95 @@ fn rayAt(ray: Ray, t: f32) -> vec3f {
 
 fn getRayColor(ray: Ray) -> vec3f {
 
-    
-    let sphere = Sphere(vec3f(0.0, 0.0, -1.0), 0.5);
-    let t = hitSphere(sphere, ray);
-    if t > 0.0 {
-        let N = normalize(rayAt(ray, t) - vec3f(0.0, 0.0, -1.0));
-        return 0.5 * (N + 1);
+    var rec: HitRecord;
+
+    if hitWorld(ray, 0, inf, &rec) {
+        return 0.5 * (rec.normal + 1);
     }
 
-    let unit_dir = normalize(ray.dir);
 
+    let unit_dir = normalize(ray.dir);
     let a = 0.5 * (unit_dir.y + 1.0);
     return (1.0 - a) * vec3f(1.0, 1.0, 1.0) + a * vec3f(0.5, 0.7, 1.0);
 
 }
 
+struct HitRecord {
+    p: vec3f,
+    normal: vec3f,
+    t: f32,
+    front_face: bool
+}
+
+fn hitWorld(ray: Ray, t_min: f32, t_max: f32, record: ptr<function, HitRecord>) -> bool {
+    if spheres_len < 1 { // out of bounds array check
+        (*record).normal = vec3f(1.0, 0.0, 0.0);
+        return true;
+    };
+
+    var temp_rec: HitRecord;
+    var hit_anything: bool = false;
+    var closest = t_max;
+
+    for (var i: u32 = 0; i < spheres_len; i++) {
+        let sphere = spheres[i];
+
+        if hitSphere(sphere, ray, t_min, t_max, &temp_rec) {
+            hit_anything = true;
+            closest = temp_rec.t;
+            (*record) = temp_rec;
+        }
+
+    }
+
+    return hit_anything;
+
+}
 
 struct Sphere {
     center: vec3f,
     radius: f32
 }
 
-fn hitSphere(sphere: Sphere, ray: Ray) -> f32 {
+fn hitSphere(sphere: Sphere, ray: Ray, t_min: f32, t_max: f32, rec: ptr<function, HitRecord>) -> bool {
 
     let oc = sphere.center - ray.orig;
 
-    let a = dot(ray.dir, ray.dir);
-    let b = -2.0 * dot(ray.dir, oc);
-    let c = dot(oc, oc) - sphere.radius * sphere.radius;
+    let a = pow(length(ray.dir), 2.0); // length squared
+    let h = dot(ray.dir, oc);
+    let c = pow(length(oc), 2.0) - sphere.radius * sphere.radius;
 
-    let discriminant = b * b - 4.0 * a * c;
+    let discriminant = h * h - a * c;
 
     if discriminant < 0 {
-        return -1.0;
-    } else {
-        return (-b - sqrt(discriminant)) / (2.0 * a);
+        return false;
     }
 
+
+    let sqrt_discr = sqrt(discriminant);
+
+    var root = (h - sqrt_discr) / a;
+    if root <= t_min || t_max < root {
+        root = (h + sqrt_discr) / a;
+
+        if root <= t_min || t_max <= root{
+            return false;
+        }
+    }
+
+    (*rec).t = root;
+    (*rec).p = rayAt(ray, (*rec).t);
+
+    let outward_normal = ((*rec).p - sphere.center) / sphere.radius;
+    (*rec).front_face = dot(ray.dir, outward_normal) < 0.0;
+
+    if (*rec).front_face {
+        (*rec).normal = outward_normal;
+    } else {
+        (*rec).normal =  -1.0 * outward_normal;
+    }
+
+    return true;
 }
 
 @vertex
@@ -88,7 +144,7 @@ fn fs_main(in: VertexOut) -> @location(0) vec4f {
     let view_port_upper_left = camera.center - vec3f(0, 0, camera.focal_length) 
         - viewport_u / 2.0 - viewport_v / 2.0;
 
-    let pixel_00_loc = view_port_upper_left + 0.5  * (pixel_delta_u + pixel_delta_v);
+    let pixel_00_loc = view_port_upper_left + 0.5 * (pixel_delta_u + pixel_delta_v);
 
     let pixel_center = pixel_00_loc 
         + in.position.x * pixel_delta_u 
