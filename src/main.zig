@@ -62,6 +62,21 @@ pub fn main() !void {
         .vertex = .{
             .module = shader_module,
             .entryPoint = "vs_main",
+            .buffers = &.{
+                wgpu.VertexBufferLayout {
+                    .stepMode = .Vertex,
+                    .arrayStride = 2 * @sizeOf(f32),
+                    .attributeCount = 1,
+                    .attributes = &[1]wgpu.VertextAttribute {
+                        wgpu.VertextAttribute {
+                            .format = .Float32x2,
+                            .offset = 0,
+                            .shaderLocation = 0
+                        }
+                    }
+                    
+                }
+            }
         },
         .primitive = .{
             .topology = .TriangleList,
@@ -100,6 +115,27 @@ pub fn main() !void {
         },
     });
     defer render_pipeline.Release();
+
+    const vertex_data = [_]f32 {
+        // x, y - first triangle
+        -1,  1, // top left
+        -1, -1, // bottom left
+         1,  1, // top right
+
+         1,  1, // top right
+         1, -1, // bottom right 
+        -1, -1, // bottom left
+    };
+
+    const vertex_buffer = try device.CreateBuffer(&.{
+        .label = .fromSlice("vertex buffer"),
+        .usage = @intFromEnum(wgpu.BufferUsage.Vertex) | @intFromEnum(wgpu.BufferUsage.CopyDst),
+        .size = @sizeOf(@TypeOf(vertex_data)),
+    });
+    defer vertex_buffer.release();
+
+    queue.WriteBuffer(vertex_buffer, 0, f32, &vertex_data);
+
 
 
     while (!window.ShouldClose()) {
@@ -140,6 +176,8 @@ pub fn main() !void {
             defer rend_pass_enc.release();
 
             rend_pass_enc.setPipeline(render_pipeline);
+            rend_pass_enc.setVertexBuffer(0, vertex_buffer, 0);
+            rend_pass_enc.draw(vertex_data.len / 2, 1, 0, 0);
             rend_pass_enc.end();
 
         }
