@@ -1,5 +1,6 @@
 
 const std = @import("std");
+const log = std.log;
 
 const zgl = @import("zgl");
 const glfw = zgl.glfw;
@@ -7,15 +8,45 @@ const wgpu = zgl.wgpu;
 
 const shader_code = @embedFile("shader.wgsl");
 
-const WINDOW_WIDTH = 600;
-const WINDOW_HEIGHT = 600;
+
+
+const ASPECT_RATIO: f32 = 16.0 / 9.0;
+
+const WINDOW_WIDTH = 800;
+const WINDOW_HEIGHT = WINDOW_WIDTH / ASPECT_RATIO;
+
+// Packed: Fields remain in the order declared, least to most significant.
+const Position = packed struct { x: f32, y: f32, z: f32 };
+
+const ViewPort = packed struct {
+    width: f32,
+    height: f32,
+};
+
+const Camera = packed struct {
+    center: Position,
+    focal_length: f32,
+    view_port: ViewPort,
+};
 
 pub fn main() !void {
+    const v_height = 2.0;
+
+    const camera = Camera {
+        .center = .{ .x = 0, .y = 0, .z = 0 },
+        .focal_length = 1,
+        .view_port = .{ 
+            .width = v_height * WINDOW_WIDTH / WINDOW_HEIGHT, 
+            .height = v_height 
+        },
+    };
 
     try glfw.init();
     defer glfw.terminate();
 
     glfw.Window.hint(.{ .resizable = false, .client_api = .NO_API });
+    log.debug("aspect ratio = {}", .{ASPECT_RATIO});
+    log.debug("window: width = {}, height = {}", .{WINDOW_WIDTH, WINDOW_HEIGHT});
     const window = try glfw.Window.Create(WINDOW_WIDTH, WINDOW_HEIGHT, "Raytracing!");
     defer  window.destroy();
 
@@ -145,16 +176,32 @@ pub fn main() !void {
 
     queue.WriteBuffer(window_uniform_buffer, 0, f32, &.{ WINDOW_WIDTH, WINDOW_HEIGHT });
 
+    const camera_uniform_buffer = try device.CreateBuffer(&.{
+        .label = .fromSlice("camera"),
+        .usage = @intFromEnum(wgpu.BufferUsage.Uniform) | @intFromEnum(wgpu.BufferUsage.CopyDst),
+        .size = @sizeOf(Camera),
+    });
+    defer camera_uniform_buffer.release();
+
+    queue.WriteBuffer(camera_uniform_buffer, 0, Camera, &.{ camera });
+
     const bind_group = try device.CreateBindGroup(&.{
         .label = .fromSlice("bind group"),
         .layout = try render_pipeline.GetBindGroupLayout(0),
-        .entryCount = 1,
-        .entries = &[1]wgpu.BindGroupEntry {
+        .entryCount = 2,
+        .entries = &[2]wgpu.BindGroupEntry {
             wgpu.BindGroupEntry {
                 .binding = 0,
                 .offset = 0,
                 .size = window_uniform_buffer.getSize(),
                 .buffer = window_uniform_buffer
+            },
+
+            wgpu.BindGroupEntry {
+                .binding = 1,
+                .offset = 0,
+                .size = camera_uniform_buffer.getSize(),
+                .buffer = camera_uniform_buffer
             }
         }
     });
