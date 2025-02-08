@@ -9,7 +9,8 @@ const inf: f32 = 3.4028235e+38;
 struct Camera {
     center: vec3f,
     focal_length: f32,
-    view_port: vec2f
+    view_port: vec2f,
+    samples_per_pixel: u32,
 }
 
 struct VertexIn {
@@ -137,12 +138,15 @@ fn randXORShift(rand_state: u32) -> u32 {
 /// returns random f32 in [0, 1)
 fn random(seed: u32) -> f32 {
     // rand_lcg
+    
     let rng_state: u32 = 1664525 * seed + 1013904223;
 
     let r0 = randXORShift(rng_state);
     let r1 = randXORShift(r0);
 
     let f0 = f32(randXORShift(r1)) * (1.0 / 4294967296.0);
+    
+    return f0;
 
 }
 
@@ -160,6 +164,14 @@ fn vs_main(in: VertexIn) -> VertexOut {
 
 }
 
+fn cantorPair2(x: u32, y: u32) -> u32 {
+    return ((x + y) * (x + y + 1)) / 2 + y;
+}
+
+fn cantorPair3(x: u32, y: u32, z: u32) -> u32 {
+    return cantorPair2(cantorPair2(x, y), z);
+}
+
 @fragment
 fn fs_main(in: VertexOut) -> @location(0) vec4f {
 
@@ -174,15 +186,31 @@ fn fs_main(in: VertexOut) -> @location(0) vec4f {
 
     let pixel_00_loc = view_port_upper_left + 0.5 * (pixel_delta_u + pixel_delta_v);
 
-    let pixel_center = pixel_00_loc 
-        + in.position.x * pixel_delta_u 
-        + in.position.y * pixel_delta_v;
+    let x = u32(in.position.x * window_size.x);
+    let y = u32(in.position.y * window_size.y);
 
-    var ray: Ray;
-    ray.orig = camera.center;
-    ray.dir = pixel_center - camera.center;
+    var color = vec3f(0, 0, 0);
 
-    let color = getRayColor(ray);
+    for (var sample: u32 = 0; sample < camera.samples_per_pixel; sample++) {
+
+        let seed = cantorPair3(x, y, sample);
+
+        //let offset = vec2f(0, 0); // turn off anti aliasing
+        let offset = vec2f(random(seed) - 0.5, random(seed) - 0.5); 
+
+        let pixel_center = pixel_00_loc 
+            + (in.position.x + offset.x) * pixel_delta_u 
+            + (in.position.y + offset.y) * pixel_delta_v;
+
+        var ray: Ray;
+        ray.orig = camera.center;
+        ray.dir = pixel_center - camera.center;
+
+        color += getRayColor(ray);
+
+    }
+
+    color = color / f32(camera.samples_per_pixel);
 
     return vec4f(color, 1);
 
