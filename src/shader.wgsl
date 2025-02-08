@@ -122,6 +122,34 @@ fn hitSphere(sphere: Sphere, ray: Ray, t_min: f32, t_max: f32, rec: ptr<function
     return true;
 }
 
+fn randXORShift(rand_state: u32) -> u32 {
+    // why these numbers? dno havent read the paper
+    var r = rand_state;
+    r ^= (r << u32(13));
+    r ^= (r << u32(17));
+    r ^= (r << u32(5));
+
+    return r;
+}
+
+// super duper random number gen ;)
+// https://www.reedbeta.com/blog/quick-and-easy-gpu-random-numbers-in-d3d11/
+/// returns random f32 in [0, 1)
+fn random(seed: u32) -> f32 {
+    // rand_lcg
+    let rng_state: u32 = 1664525 * seed + 1013904223;
+
+    let r0 = randXORShift(rng_state);
+    let r1 = randXORShift(r0);
+
+    let f0 = f32(randXORShift(r1)) * (1.0 / 4294967296.0);
+
+}
+
+fn randomInRange(seed: u32, min: f32, max: f32) -> f32 {
+    return min + (max - min) * random(seed);
+}
+
 @vertex
 fn vs_main(in: VertexIn) -> VertexOut {
 
