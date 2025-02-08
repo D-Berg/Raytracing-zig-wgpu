@@ -28,6 +28,7 @@ const Camera = packed struct {
     focal_length: f32,
     view_port: ViewPort,
     samples_per_pixel: u32,
+    max_depth: u32,
 };
 
 
@@ -47,7 +48,8 @@ pub fn main() !void {
             .width = v_width, 
             .height = v_height 
         },
-        .samples_per_pixel = 100
+        .samples_per_pixel = 10,
+        .max_depth = 20
     };
 
     try glfw.init();

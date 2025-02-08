@@ -11,6 +11,7 @@ struct Camera {
     focal_length: f32,
     view_port: vec2f,
     samples_per_pixel: u32,
+    max_depth: u32
 }
 
 struct VertexIn {
@@ -26,25 +27,88 @@ struct Ray {
     dir: vec3f
 }
 
+//fn RandomVec3f(seed: u32, min: f32, max: f32) -> vec3f {
+//    return vec3f(
+//        randomInRange(seed + 1, min, max),
+//        randomInRange(seed + 2, min, max),
+//        randomInRange(seed + 3, min, max)
+//    );
+//}
+
+const pi: f32= 3.14159265358979323846264338327950288419716939937510;
+
+// https://en.wikipedia.org/wiki/Box%E2%80%93Muller_transform
+fn gaussian(seed: ptr<function, u32>) -> vec2f {
+    let u1 = random(seed);
+    let u2 = random(seed);
+
+    let z1 = sqrt(-2.0 * log(u1)) * cos(2.0 * pi * u2);
+    let z2 = sqrt(-2.0 * log(u1)) * sin(2.0 * pi * u2);
+
+    return vec2f(z1, z2);
+
+}
+
+
+// solution in source absolutely killed performance
+// one can generate point on unit sphere by sampling 3 gaussian random variables.
+// https://mathworld.wolfram.com/SpherePointPicking.html
+fn RandomVec3fOnHemisphere(normal: vec3f, seed: ptr<function, u32>) -> vec3f {
+    let xy = gaussian(seed);
+    let z = gaussian(seed).y;
+
+    let rand_vec = normalize(vec3f(xy, z));
+
+    // ensure its in right hemisphere
+    if dot(rand_vec, normal) < 0.0 {
+        return rand_vec;
+    } else {
+        return -1.0 * rand_vec;
+    }
+}
+
 fn rayAt(ray: Ray, t: f32) -> vec3f {
     return ray.orig + t * ray.dir;
 }
 
-fn getRayColor(ray: Ray) -> vec3f {
+fn getRayColor(ray: Ray, seed: ptr<function, u32>) -> vec3f {
 
-    var rec: HitRecord;
+    var color = vec3f(1, 1, 1);
 
-    if hitWorld(ray, 0, inf, &rec) {
-        return 0.5 * (rec.normal + 1);
+    var r = ray;
+    for (var i: u32 = 0; i < camera.max_depth; i++) {
+
+        var rec: HitRecord;
+
+        if hitWorld(r, 0.0001, inf, &rec) {
+
+            let direction = rec.normal + RandomVec3fOnHemisphere(rec.normal, seed);
+            r = Ray(rec.p, direction);
+            //return 0.5 * (rec.normal + 1.0);
+            //return RandomVec3fOnHemisphere(rec.normal, seed);
+            color *= 0.5;
+
+        } else {
+
+            let unit_dir = normalize(r.dir);
+            let a = 0.5 * (unit_dir.y + 1.0);
+
+            color *= (1.0 - a) * vec3f(1.0, 1.0, 1.0) + a * vec3f(0.5, 0.7, 1.0);
+            return color;
+
+        }
     }
 
-
-    let unit_dir = normalize(ray.dir);
-    let a = 0.5 * (unit_dir.y + 1.0);
-    return (1.0 - a) * vec3f(1.0, 1.0, 1.0) + a * vec3f(0.5, 0.7, 1.0);
+    return color;
 
 }
 
+fn panic() {
+    while(true) {
+
+    }
+
+}
 struct HitRecord {
     p: vec3f,
     normal: vec3f,
@@ -117,7 +181,7 @@ fn hitSphere(sphere: Sphere, ray: Ray, t_min: f32, t_max: f32, rec: ptr<function
     if (*rec).front_face {
         (*rec).normal = outward_normal;
     } else {
-        (*rec).normal =  -1.0 * outward_normal;
+        (*rec).normal = -1.0 * outward_normal;
     }
 
     return true;
@@ -136,21 +200,25 @@ fn randXORShift(rand_state: u32) -> u32 {
 // super duper random number gen ;)
 // https://www.reedbeta.com/blog/quick-and-easy-gpu-random-numbers-in-d3d11/
 /// returns random f32 in [0, 1)
-fn random(seed: u32) -> f32 {
-    // rand_lcg
-    
+fn rand_lcg(seed: u32) -> u32 {
     let rng_state: u32 = 1664525 * seed + 1013904223;
 
     let r0 = randXORShift(rng_state);
     let r1 = randXORShift(r0);
 
-    let f0 = f32(randXORShift(r1)) * (1.0 / 4294967296.0);
-    
+    return randXORShift(r1);
+
+}
+
+fn random(seed: ptr<function, u32>) -> f32 {
+    (*seed) = rand_lcg((*seed));
+
+    let f0 = f32(rand_lcg((*seed))) * (1.0 / 4294967296.0);
     return f0;
 
 }
 
-fn randomInRange(seed: u32, min: f32, max: f32) -> f32 {
+fn randomInRange(seed: ptr<function, u32>, min: f32, max: f32) -> f32 {
     return min + (max - min) * random(seed);
 }
 
@@ -193,10 +261,13 @@ fn fs_main(in: VertexOut) -> @location(0) vec4f {
 
     for (var sample: u32 = 0; sample < camera.samples_per_pixel; sample++) {
 
-        let seed = cantorPair3(x, y, sample);
+        var seed = cantorPair3(x, y, sample);
 
         //let offset = vec2f(0, 0); // turn off anti aliasing
-        let offset = vec2f(random(seed) - 0.5, random(seed) - 0.5); 
+        let r1 = random(&seed);
+        let r2 = random(&seed);
+
+        let offset = vec2f(r1 - 0.5, r2 - 0.5); 
 
         let pixel_center = pixel_00_loc 
             + (in.position.x + offset.x) * pixel_delta_u 
@@ -206,12 +277,17 @@ fn fs_main(in: VertexOut) -> @location(0) vec4f {
         ray.orig = camera.center;
         ray.dir = pixel_center - camera.center;
 
-        color += getRayColor(ray);
+        color += getRayColor(ray, &seed);
+
 
     }
 
-    color = color / f32(camera.samples_per_pixel);
+    // checking randomness function, look random lol
+    //var seed = cantorPair2(x, y);
+    //let r1 = random(&seed);
+    //return vec4f(r1, r1, r1, 1);
 
+    color = color / f32(camera.samples_per_pixel);
     return vec4f(color, 1);
 
 }
