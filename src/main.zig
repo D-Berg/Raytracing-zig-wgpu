@@ -12,6 +12,7 @@ const builtin = @import("builtin");
 const os = builtin.os.tag;
 
 const assert = std.debug.assert;
+const random = std.crypto.random;
 
 
 const ASPECT_RATIO: f32 = 16.0 / 9.0;
@@ -82,8 +83,8 @@ pub fn main() !void {
         .look_from = .{ .x = 13, .z = 2, .y = 3 },
         .look_at = .{ .x = 0, .y = 0, .z = 0 },
         .vfov = 20,
-        .samples_per_pixel = 20,
-        .max_depth = 10,
+        .samples_per_pixel = 1,
+        .max_depth = 2,
         .defocus_angle = 0.6,
         .focus_dist = 10,
 
@@ -249,6 +250,52 @@ pub fn main() !void {
             .color = .{ .r = 0.8, .g = 0.8, .b = 0.0 }
         }
     );
+
+    var a: i32 = -11;
+    while (a < 11) : (a += 1) {
+        var b: i32 = -11;
+
+        while (b < 11) : (b += 1) {
+            const choose_mat = random.float(f32);
+
+            const center = Position{ 
+                .x = @as(f32, @floatFromInt(a)) + 0.9 * random.float(f32),
+                .y = 0.2,
+                .z = @as(f32, @floatFromInt(b)) + 0.9 * random.float(f32),
+            };
+
+            if (choose_mat < 0.8) {
+                //diffuse 
+
+                try spheres.append(
+                    Sphere {
+                        .center = center,
+                        .radius = 0.2,
+                        .material = .Lambertian,
+                        .color = .{
+                            .r = random.float(f32) * random.float(f32),
+                            .g = random.float(f32) * random.float(f32),
+                            .b = random.float(f32) * random.float(f32),
+                        }
+
+                    }
+
+                );
+
+
+            } 
+
+            if (choose_mat < 0.95 and choose_mat >= 0.8) {
+
+            } else {
+
+            }
+
+
+        }
+
+
+    }
 
     try spheres.append(
         Sphere {
