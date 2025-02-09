@@ -316,7 +316,13 @@ struct Sphere {
     refraction_index: f32
 }
 
-fn hitSphere(sphere: ptr<function, Sphere>, ray: ptr<function, Ray>, t_min: f32, t_max: f32, rec: ptr<function, HitRecord>) -> bool {
+fn hitSphere(
+    sphere: ptr<function, Sphere>, 
+    ray: ptr<function, Ray>, 
+    t_min: f32, 
+    t_max: f32, 
+    rec: ptr<function, HitRecord>
+) -> bool {
 
     let sphere_center = vec3f((*sphere).center.x, (*sphere).center.y, (*sphere).center.z);
     let oc = sphere_center - (*ray).orig;
@@ -357,11 +363,7 @@ fn hitSphere(sphere: ptr<function, Sphere>, ray: ptr<function, Ray>, t_min: f32,
     (*rec).fuzz = (*sphere).fuzz;
     (*rec).refraction_index = (*sphere).refraction_index;
 
-    if (*rec).front_face {
-        (*rec).normal = outward_normal;
-    } else {
-        (*rec).normal = -outward_normal;
-    }
+    (*rec).normal = select(-outward_normal, outward_normal, (*rec).front_face);
 
     return true;
 }
@@ -479,7 +481,7 @@ fn fs_main(in: VertexOut) -> @location(0) vec4f {
         let r1 = random(&seed);
         let r2 = random(&seed);
 
-        let offset = vec2f(r1 - 0.5, r2 - 0.5); 
+        let offset = vec2f(r1, r2) - 0.5; 
 
         let pixel_center = pixel_00_loc 
             + (in.position.x + offset.x) * pixel_delta_u 
