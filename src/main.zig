@@ -8,6 +8,9 @@ const wgpu = zgl.wgpu;
 
 const shader_code = @embedFile("shader.wgsl");
 
+const builtin = @import("builtin");
+const os = builtin.os.tag;
+
 const assert = std.debug.assert;
 
 
@@ -213,6 +216,8 @@ pub fn main() !void {
     });
     defer vertex_buffer.release();
 
+    if (os == .windows) vertex_buffer.unmap();
+
     queue.WriteBuffer(vertex_buffer, 0, f32, &vertex_data);
 
     const window_uniform_buffer = try device.CreateBuffer(&.{
@@ -221,6 +226,8 @@ pub fn main() !void {
         .size = 2 * @sizeOf(f32),
     });
     defer window_uniform_buffer.release();
+
+    if (os == .windows) vertex_buffer.unmap();
 
     queue.WriteBuffer(window_uniform_buffer, 0, f32, &.{ WINDOW_WIDTH, WINDOW_HEIGHT });
 
@@ -290,6 +297,8 @@ pub fn main() !void {
         .size = @sizeOf(u32),
     });
     defer sphere_len_buffer.release();
+
+    if (os == .windows) sphere_len_buffer.unmap();
 
     assert(@sizeOf(u32) == sphere_len_buffer.getSize());
 
