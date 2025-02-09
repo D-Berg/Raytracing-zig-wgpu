@@ -19,11 +19,6 @@ const WINDOW_HEIGHT = @divTrunc(WINDOW_WIDTH, ASPECT_RATIO);
 // Packed: Fields remain in the order declared, least to most significant.
 const Position = struct { x: f32, y: f32, z: f32 };
 
-const ViewPort = struct {
-    width: f32,
-    height: f32,
-};
-
 const RefractionIndex = enum {
     Vacuum,
     Air,
@@ -46,11 +41,15 @@ const RefractionIndex = enum {
 };
 
 const Camera = struct {
-    center: struct { x: f32, y: f32, z: f32},
-    focal_length: f32,
-    view_port: ViewPort,
-    samples_per_pixel: u32,
-    max_depth: u32,
+    samples_per_pixel: u32 = 5, 
+    max_depth: u32 = 10,
+    vfov: f32 = 20, // vertical view angle (field of view)
+    look_from: Position = .{ .x = 0, .y = 0, .z = 0 }, // point looking from
+    look_at: Position = .{ .x = 0, .y = 0, .z = -1 }, // point looking at
+    v_up: Position = .{ .x = 0, .y = 1, .z = 0}, // relative up dir
+    defocus_angle: f32 = 10,
+    focus_dist: f32 = 3.4,
+
 };
 
 
@@ -70,18 +69,15 @@ const Sphere = struct {
 };
 
 pub fn main() !void {
-    const v_height = 2.0;
-    const v_width = v_height * WINDOW_WIDTH / WINDOW_HEIGHT;
+
+    var gpa = std.heap.GeneralPurposeAllocator(.{}).init;
+    defer _ = gpa.deinit();
+
+    //const allocator = gpa.allocator();
 
     const camera = Camera {
-        .center = .{ .x = 0, .y = 0, .z = 0 },
-        .focal_length = 1,
-        .view_port = .{ 
-            .width = v_width, 
-            .height = v_height 
-        },
-        .samples_per_pixel = 5,
-        .max_depth = 20
+        .look_from = .{ .x = -2, .z = 2, .y = 1 },
+        .max_depth = 10
     };
 
     try glfw.init();
@@ -90,9 +86,6 @@ pub fn main() !void {
     glfw.Window.hint(.{ .resizable = false, .client_api = .NO_API });
     log.debug("aspect ratio = {}", .{ASPECT_RATIO});
     log.debug("window: width = {}, height = {}", .{WINDOW_WIDTH, WINDOW_HEIGHT});
-    log.debug("viewport: width = {}, height = {}", .{
-        camera.view_port.width, camera.view_port.height
-    });
     const window = try glfw.Window.Create(WINDOW_WIDTH, WINDOW_HEIGHT, "Raytracing!");
     defer window.destroy();
 
@@ -227,7 +220,7 @@ pub fn main() !void {
 
     const camera_uniform_buffer = try device.CreateBuffer(&.{
         .label = .fromSlice("camera"),
-        .usage = @intFromEnum(wgpu.BufferUsage.Uniform) | @intFromEnum(wgpu.BufferUsage.CopyDst),
+        .usage = @intFromEnum(wgpu.BufferUsage.Storage) | @intFromEnum(wgpu.BufferUsage.CopyDst),
         .size = @sizeOf(Camera),
     });
     defer camera_uniform_buffer.release();
@@ -271,6 +264,7 @@ pub fn main() !void {
             .color = .{ .r = 0.8, .g = 0.6, .b = 0.2 },
             .metal_fuzz = 1
         }
+        
     };
 
     const spheres_buffer = try device.CreateBuffer(&.{

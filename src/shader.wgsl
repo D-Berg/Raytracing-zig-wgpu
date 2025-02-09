@@ -1,6 +1,6 @@
 
 @group(0) @binding(0) var<uniform> window_size: vec2f;
-@group(0) @binding(1) var<uniform> camera: Camera;
+@group(0) @binding(1) var<storage> camera: Camera;
 @group(0) @binding(2) var<storage> spheres: array<Sphere>;
 @group(0) @binding(3) var<uniform> spheres_len: u32;
 
@@ -11,12 +11,16 @@ const MATERIAL_METAL: u32 = 1;
 const MATERIAL_DIELECTRIC: u32 = 2;
 
 struct Camera {
-    center: vec3f,
-    focal_length: f32,
-    view_port: vec2f,
     samples_per_pixel: u32,
-    max_depth: u32
+    max_depth: u32,
+    vfov: f32,
+    look_from: Position,
+    look_at: Position,
+    v_up: Position,
+    defocus_angle: f32,
+    focus_dist: f32,
 }
+
 
 struct VertexIn {
     @location(0) position: vec2f,
@@ -31,7 +35,7 @@ struct Ray {
     dir: vec3f
 }
 
-const pi: f32= 3.14159265358979323846264338327950288419716939937510;
+const pi: f32 = 3.14159265358979323846264338327950288419716939937510;
 
 // https://en.wikipedia.org/wiki/Box%E2%80%93Muller_transform
 fn gaussian(seed: ptr<function, u32>) -> vec2f {
@@ -57,6 +61,10 @@ fn RandomUnitVec3f(seed: ptr<function, u32>) -> vec3f {
 
     return rand_vec;
 
+}
+
+fn degreesToRadians(degrees: f32) -> f32 {
+    return degrees * pi / 180;
 }
 
 fn RandomVec3fOnHemisphere(normal: vec3f, seed: ptr<function, u32>) -> vec3f {
@@ -258,7 +266,8 @@ struct HitRecord {
 
 fn hitWorld(ray: Ray, t_min: f32, t_max: f32, record: ptr<function, HitRecord>) -> bool {
     if spheres_len < 1 { // out of bounds array check
-        (*record).normal = vec3f(1.0, 0.0, 0.0);
+        //(*record).normal = vec3f(1.0, 0.0, 0.0);
+        panic();
         return true;
     };
 
@@ -285,6 +294,10 @@ struct Position {
     x: f32,
     y: f32,
     z: f32
+}
+
+fn Vec3fFromPosition(pos: Position) -> vec3f {
+    return vec3f(pos.x, pos.y, pos.z);
 }
 
 struct Color {
@@ -371,6 +384,13 @@ fn rand_lcg(seed: u32) -> u32 {
 
 }
 
+fn RandomVec3InUnitDisk(seed: ptr<function, u32>) -> vec3f {
+    let theta = randomInRange(seed, 0, 2 * pi);
+    let r = random(seed);
+
+    return vec3f(r * cos(theta), r * sin(theta), 0);
+}
+
 /// return f32 in [0, 1)
 fn random(seed: ptr<function, u32>) -> f32 {
     (*seed) = rand_lcg((*seed));
@@ -402,20 +422,45 @@ fn cantorPair3(x: u32, y: u32, z: u32) -> u32 {
     return cantorPair2(cantorPair2(x, y), z);
 }
 
+
 @fragment
 fn fs_main(in: VertexOut) -> @location(0) vec4f {
 
-    let viewport_u = vec3(camera.view_port.x, 0, 0);
-    let viewport_v = vec3(0, -camera.view_port.y, 0);
+    let theta = degreesToRadians(camera.vfov);
+
+    let camera_center = Vec3fFromPosition(camera.look_from);
+
+    let camera_dir = camera_center - Vec3fFromPosition(camera.look_at);
+    //let camera_focal_length = length(camera_dir);
+
+
+    let h = tan(theta / 2);
+    let viewport_height = 2 * h * camera.focus_dist;
+    let viewport_width = viewport_height * (window_size.x / window_size.y);
+
+    let w = normalize(camera_dir);
+    let u = normalize(cross(Vec3fFromPosition(camera.v_up), w));
+    let v = cross(w, u);
+
+    // Calculate the vectors across the horizontal and down the vertical viewport edges.
+    let viewport_u = viewport_width * u;
+    let viewport_v = viewport_height * (-v);
     
+    // Calculate the horizontal and vertical delta vectors to the next pixel.
     let pixel_delta_u = viewport_u / window_size.x;
     let pixel_delta_v = viewport_v / window_size.y;
 
-    let view_port_upper_left = camera.center - vec3f(0, 0, camera.focal_length) 
+    // Calculate the location of the upper left pixel.
+    let view_port_upper_left = camera_center - (camera.focus_dist * w) 
         - viewport_u / 2.0 - viewport_v / 2.0;
 
     let pixel_00_loc = view_port_upper_left + 0.5 * (pixel_delta_u + pixel_delta_v);
-
+    
+    // Calculate the camera defocus disk basis vectors.
+    let defocus_radius = camera.focus_dist * tan(degreesToRadians(camera.defocus_angle / 2));
+    var defocus_disk_u = u * defocus_radius;
+    var defocus_disk_v = v * defocus_radius;
+    
     let x = u32(in.position.x * window_size.x);
     let y = u32(in.position.y * window_size.y);
 
@@ -436,8 +481,14 @@ fn fs_main(in: VertexOut) -> @location(0) vec4f {
             + (in.position.y + offset.y) * pixel_delta_v;
 
         var ray: Ray;
-        ray.orig = camera.center;
-        ray.dir = pixel_center - camera.center;
+
+        if camera.defocus_angle <= 0 {
+            ray.orig = camera_center;
+        } else {
+            var p = RandomVec3InUnitDisk(&seed);
+            ray.orig = camera_center + (p.x * defocus_disk_u) + (p.y * defocus_disk_v);
+        }
+        ray.dir = pixel_center - ray.orig;
 
         color += getRayColor(ray, &seed);
 
