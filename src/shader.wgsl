@@ -8,6 +8,7 @@ const inf: f32 = 3.4028235e+38;
 
 const MATERIAL_LAMBERTIAN: u32 = 0;
 const MATERIAL_METAL: u32 = 1;
+const MATERIAL_DIELECTRIC: u32 = 2;
 
 struct Camera {
     center: vec3f,
@@ -83,6 +84,21 @@ fn reflect(v: vec3f, n: vec3f) -> vec3f {
     return v - 2.0 * dot(v, n) * n;
 }
 
+fn refract(uv: vec3f, n: vec3f, etai_over_etat: f32) -> vec3f {
+    let cos_theta = min(dot(-uv, n), 1.0);
+
+    let r_out_perp = etai_over_etat * (uv + cos_theta * n);
+
+    let r_out_perp_len = length(r_out_perp);
+
+    let r_out_perp_len_squared = r_out_perp_len * r_out_perp_len;
+
+    let r_out_parallel = -sqrt(abs(1.0 - r_out_perp_len_squared)) * n;
+
+    return r_out_perp + r_out_parallel;
+
+}
+
 fn Vec3fFromColor(color: Color) -> vec3f {
     return vec3f(color.r, color.g, color.b);
 
@@ -111,6 +127,7 @@ fn scatter(
 
             return true;
         }
+
         case MATERIAL_METAL: {
 
             let albedo = Vec3fFromColor((*rec).material_color);
@@ -125,6 +142,39 @@ fn scatter(
             (*attenuation) = albedo;
 
             return true;
+        }
+
+        case MATERIAL_DIELECTRIC: {
+            
+            let refraction_index = (*rec).refraction_index;
+            var ri: f32;
+                
+            if (*rec).front_face {
+                ri = 1.0 / (refraction_index);
+            } else {
+                ri = refraction_index;
+            }
+
+            let unit_dir = normalize(ray.dir);
+
+            let cos_theta = min(-dot(-unit_dir, (*rec).normal), 1.0);
+            let sin_theta = sqrt(1.0 - cos_theta * cos_theta);
+
+            let cannot_refract = ri * sin_theta > 1.0;
+
+            var dir: vec3f;
+
+            if cannot_refract {
+                dir = reflect(unit_dir, (*rec).normal);
+            } else {
+                dir = refract(unit_dir, (*rec).normal, ri);
+            }
+            
+            (*scattered) = Ray((*rec).p, dir);
+            (*attenuation) = vec3f(1, 1, 1);
+        
+            return true;
+
         }
         
         default: {
@@ -188,7 +238,8 @@ struct HitRecord {
     front_face: bool,
     material: u32,
     material_color: Color,
-    fuzz: f32
+    fuzz: f32,
+    refraction_index: f32
 }
 
 fn hitWorld(ray: Ray, t_min: f32, t_max: f32, record: ptr<function, HitRecord>) -> bool {
@@ -234,6 +285,7 @@ struct Sphere {
     material: u32,
     color: Color,
     fuzz: f32,
+    refraction_index: f32
 }
 
 fn hitSphere(sphere: Sphere, ray: Ray, t_min: f32, t_max: f32, rec: ptr<function, HitRecord>) -> bool {
@@ -271,6 +323,7 @@ fn hitSphere(sphere: Sphere, ray: Ray, t_min: f32, t_max: f32, rec: ptr<function
     (*rec).material = sphere.material;
     (*rec).material_color = sphere.color;
     (*rec).fuzz = sphere.fuzz;
+    (*rec).refraction_index = sphere.refraction_index;
 
     if (*rec).front_face {
         (*rec).normal = outward_normal;

@@ -35,15 +35,17 @@ const Camera = struct {
 
 const Material = enum(u32) {
     Lambertian = 0,
-    Metal = 1, 
+    Metal = 1,
+    Dielectric = 2,
 };
 
 const Sphere = struct {
     center: Position,
     radius: f32,
     material: Material = .Lambertian,
-    color: struct { r: f32, g: f32, b: f32 },
+    color: struct { r: f32, g: f32, b: f32 } = .{ .r = 0, .g = 0, .b = 0},
     metal_fuzz: f32 = 0,
+    refraction_index: f32 = 0
 };
 
 pub fn main() !void {
@@ -226,9 +228,8 @@ pub fn main() !void {
         Sphere {
             .center = .{ .x = -1, .y = 0, .z = -1},
             .radius = 0.5,
-            .material = .Metal,
-            .color = .{ .r = 0.8, .g = 0.8, .b = 0.8 },
-            .metal_fuzz = 0.3
+            .material = .Dielectric,
+            .refraction_index = 1.0 / 1.33
         },
         Sphere {
             .center = .{ .x = 1, .y = 0, .z = -1},
