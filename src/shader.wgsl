@@ -85,7 +85,7 @@ fn getRayColor(ray: Ray, seed: ptr<function, u32>) -> vec3f {
             let direction = rec.normal + RandomVec3fOnHemisphere(rec.normal, seed);
             r = Ray(rec.p, direction);
             //return 0.5 * (rec.normal + 1.0);
-            color *= 0.5;
+            color *= 0.1;
 
         } else {
 
@@ -288,7 +288,7 @@ fn fs_main(in: VertexOut) -> @location(0) vec4f {
 
     color = color / f32(camera.samples_per_pixel);
     // sqrt = gamma of 2 
-    return vec4f(sqrt(color), 1);
+    return vec4f(color, 1);
 
 }
 
