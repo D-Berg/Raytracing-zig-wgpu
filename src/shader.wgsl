@@ -1,7 +1,7 @@
 
 @group(0) @binding(0) var<uniform> window_size: vec2f;
-@group(0) @binding(1) var<storage> camera: Camera;
-@group(0) @binding(2) var<storage> spheres: array<Sphere>;
+@group(0) @binding(1) var<storage, read> camera: Camera;
+@group(0) @binding(2) var<storage, read> spheres: array<Sphere>;
 @group(0) @binding(3) var<uniform> spheres_len: u32;
 
 const inf: f32 = 3.4028235e+38;
@@ -113,7 +113,9 @@ fn reflectance(cosine: f32, ri: f32) -> f32 {
     var r0 = (1.0 - ri) / (1.0 + ri);
     r0 = r0 * r0;
 
-    return r0 + (1.0 - r0) * pow(1.0 - cosine, 5.0);
+    let p = 1.0 - cosine;
+
+    return r0 + (1.0 - r0) * p * p * p * p * p;
 }
 
 fn Vec3fFromColor(color: Color) -> vec3f {
@@ -319,9 +321,13 @@ fn hitSphere(sphere: ptr<function, Sphere>, ray: ptr<function, Ray>, t_min: f32,
     let sphere_center = vec3f((*sphere).center.x, (*sphere).center.y, (*sphere).center.z);
     let oc = sphere_center - (*ray).orig;
 
-    let a = pow(length((*ray).dir), 2.0); // length squared
+    let ray_dir_len = length((*ray).dir);
+    let oc_len = length(oc);
+
+    let a = ray_dir_len * ray_dir_len; // length squared
     let h = dot((*ray).dir, oc);
-    let c = pow(length(oc), 2.0) - (*sphere).radius * (*sphere).radius;
+    
+    let c = oc_len * oc_len - (*sphere).radius * (*sphere).radius;
 
     let discriminant = h * h - a * c;
 
