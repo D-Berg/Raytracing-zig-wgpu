@@ -77,8 +77,8 @@ fn RandomVec3fOnHemisphere(normal: vec3f, seed: ptr<function, u32>) -> vec3f {
     }
 }
 
-fn rayAt(ray: Ray, t: f32) -> vec3f {
-    return ray.orig + t * ray.dir;
+fn rayAt(ray: ptr<function, Ray>, t: f32) -> vec3f {
+    return (*ray).orig + t * (*ray).dir;
 }
 
 
@@ -122,7 +122,7 @@ fn Vec3fFromColor(color: Color) -> vec3f {
 }
 
 fn scatter(
-    ray: Ray, 
+    ray: ptr<function, Ray>, 
     rec: ptr<function, HitRecord>, 
     attenuation: ptr<function, vec3f>, 
     scattered: ptr<function, Ray>, 
@@ -148,7 +148,7 @@ fn scatter(
         case MATERIAL_METAL: {
 
             let albedo = Vec3fFromColor((*rec).material_color);
-            var reflected = reflect(ray.dir, (*rec).normal);
+            var reflected = reflect((*ray).dir, (*rec).normal);
 
             let fuzz = (*rec).fuzz;
             reflected = normalize(reflected) + (fuzz * RandomUnitVec3f(seed));
@@ -172,7 +172,7 @@ fn scatter(
                 ri = refraction_index;
             }
 
-            let unit_dir = normalize(ray.dir);
+            let unit_dir = normalize((*ray).dir);
 
             let cos_theta = min(dot(-unit_dir, (*rec).normal), 1.0);
             let sin_theta = sqrt(1.0 - cos_theta * cos_theta);
@@ -206,22 +206,21 @@ fn scatter(
 
 }
 
-fn getRayColor(ray: Ray, seed: ptr<function, u32>) -> vec3f {
+fn getRayColor(ray: ptr<function, Ray>, seed: ptr<function, u32>) -> vec3f {
 
     var color = vec3f(1, 1, 1);
 
-    var r = ray;
     for (var i: u32 = 0; i < camera.max_depth; i++) {
 
         var rec: HitRecord;
 
-        if hitWorld(r, 0.0001, inf, &rec) {
+        if hitWorld(ray, 0.0001, inf, &rec) {
             var scattered: Ray;
             var attenuation: vec3f;
 
-            if scatter(r, &rec, &attenuation, &scattered, seed) {
+            if scatter(ray, &rec, &attenuation, &scattered, seed) {
                 color *= attenuation;
-                r = scattered;
+                (*ray) = scattered;
             } else {
                 break;
             }
@@ -233,7 +232,7 @@ fn getRayColor(ray: Ray, seed: ptr<function, u32>) -> vec3f {
 
         } else {
 
-            let unit_dir = normalize(r.dir);
+            let unit_dir = normalize((*ray).dir);
             let a = 0.5 * (unit_dir.y + 1.0);
 
             color *= (1.0 - a) * vec3f(1.0, 1.0, 1.0) + a * vec3f(0.5, 0.7, 1.0);
@@ -264,7 +263,7 @@ struct HitRecord {
     refraction_index: f32
 }
 
-fn hitWorld(ray: Ray, t_min: f32, t_max: f32, record: ptr<function, HitRecord>) -> bool {
+fn hitWorld(ray: ptr<function, Ray>, t_min: f32, t_max: f32, record: ptr<function, HitRecord>) -> bool {
     if spheres_len < 1 { // out of bounds array check
         //(*record).normal = vec3f(1.0, 0.0, 0.0);
         panic();
@@ -276,9 +275,9 @@ fn hitWorld(ray: Ray, t_min: f32, t_max: f32, record: ptr<function, HitRecord>) 
     var closest = t_max;
 
     for (var i: u32 = 0; i < spheres_len; i++) {
-        let sphere = spheres[i];
+        var sphere = spheres[i];
 
-        if hitSphere(sphere, ray, t_min, closest, &temp_rec) {
+        if hitSphere(&sphere, ray, t_min, closest, &temp_rec) {
             hit_anything = true;
             closest = temp_rec.t;
             (*record) = temp_rec;
@@ -315,14 +314,14 @@ struct Sphere {
     refraction_index: f32
 }
 
-fn hitSphere(sphere: Sphere, ray: Ray, t_min: f32, t_max: f32, rec: ptr<function, HitRecord>) -> bool {
+fn hitSphere(sphere: ptr<function, Sphere>, ray: ptr<function, Ray>, t_min: f32, t_max: f32, rec: ptr<function, HitRecord>) -> bool {
 
-    let sphere_center = vec3f(sphere.center.x, sphere.center.y, sphere.center.z);
-    let oc = sphere_center - ray.orig;
+    let sphere_center = vec3f((*sphere).center.x, (*sphere).center.y, (*sphere).center.z);
+    let oc = sphere_center - (*ray).orig;
 
-    let a = pow(length(ray.dir), 2.0); // length squared
-    let h = dot(ray.dir, oc);
-    let c = pow(length(oc), 2.0) - sphere.radius * sphere.radius;
+    let a = pow(length((*ray).dir), 2.0); // length squared
+    let h = dot((*ray).dir, oc);
+    let c = pow(length(oc), 2.0) - (*sphere).radius * (*sphere).radius;
 
     let discriminant = h * h - a * c;
 
@@ -345,12 +344,12 @@ fn hitSphere(sphere: Sphere, ray: Ray, t_min: f32, t_max: f32, rec: ptr<function
     (*rec).t = root;
     (*rec).p = rayAt(ray, (*rec).t);
 
-    let outward_normal = ((*rec).p - sphere_center) / sphere.radius;
-    (*rec).front_face = dot(ray.dir, outward_normal) < 0.0;
-    (*rec).material = sphere.material;
-    (*rec).material_color = sphere.color;
-    (*rec).fuzz = sphere.fuzz;
-    (*rec).refraction_index = sphere.refraction_index;
+    let outward_normal = ((*rec).p - sphere_center) / (*sphere).radius;
+    (*rec).front_face = dot((*ray).dir, outward_normal) < 0.0;
+    (*rec).material = (*sphere).material;
+    (*rec).material_color = (*sphere).color;
+    (*rec).fuzz = (*sphere).fuzz;
+    (*rec).refraction_index = (*sphere).refraction_index;
 
     if (*rec).front_face {
         (*rec).normal = outward_normal;
@@ -490,7 +489,7 @@ fn fs_main(in: VertexOut) -> @location(0) vec4f {
         }
         ray.dir = pixel_center - ray.orig;
 
-        color += getRayColor(ray, &seed);
+        color += getRayColor(&ray, &seed);
 
 
     }

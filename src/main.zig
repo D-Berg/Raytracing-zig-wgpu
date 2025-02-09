@@ -13,7 +13,7 @@ const assert = std.debug.assert;
 
 const ASPECT_RATIO: f32 = 16.0 / 9.0;
 
-const WINDOW_WIDTH = 1080;
+const WINDOW_WIDTH = 1200;
 const WINDOW_HEIGHT = @divTrunc(WINDOW_WIDTH, ASPECT_RATIO);
 
 // Packed: Fields remain in the order declared, least to most significant.
@@ -73,11 +73,17 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}).init;
     defer _ = gpa.deinit();
 
-    //const allocator = gpa.allocator();
+    const allocator = gpa.allocator();
 
     const camera = Camera {
-        .look_from = .{ .x = -2, .z = 2, .y = 1 },
-        .max_depth = 10
+        .look_from = .{ .x = 13, .z = 2, .y = 3 },
+        .look_at = .{ .x = 0, .y = 0, .z = 0 },
+        .vfov = 20,
+        .samples_per_pixel = 20,
+        .max_depth = 10,
+        .defocus_angle = 0.6,
+        .focus_dist = 10,
+
     };
 
     try glfw.init();
@@ -227,65 +233,56 @@ pub fn main() !void {
 
     queue.WriteBuffer(camera_uniform_buffer, 0, Camera, &.{ camera });
     
+    var spheres = std.ArrayList(Sphere).init(allocator);
+    defer spheres.deinit();
 
-    const spheres_data = [_]Sphere {
-        Sphere { // world
-            .center = .{ .x = 0, .y = -100.5, .z = -1},
-            .radius = 100,
+    try spheres.append(Sphere { // world
+            .center = .{ .x = 0, .y = -1000, .z = 0},
+            .radius = 1000,
             .color = .{ .r = 0.8, .g = 0.8, .b = 0.0 }
-        },
-        Sphere { // center diffuse
-            .center = .{ .x = 0, .y = 0, .z = -1.2 }, 
-            .material = .Lambertian,
-            .radius = 0.5,
-            .color = .{ .r = 0.1, .g = 0.2, .b = 0.5}
-        },
-
-        Sphere { // left glass
-            .center = .{ .x = -1, .y = 0, .z = -1},
-            .radius = 0.5,
-            .material = .Dielectric,
-            .refraction_index = RefractionIndex.getVal(.Glass)
-        },
-
-        Sphere { // left inner bubble
-            .center = .{ .x = -1, .y = 0, .z = -1},
-            .radius = 0.4,
-            .material = .Dielectric,
-            // ratio of the refractive index of the object divided by the refractive index of the enclosing medium
-            // meaning ball of air inside glass ball
-            .refraction_index = RefractionIndex.getVal(.Air) / RefractionIndex.getVal(.Glass),
-            //.color = .{ .r = 1, .g = 0,.b = 0 },
-        },
-        Sphere { // right metal
-            .center = .{ .x = 1, .y = 0, .z = -1},
-            .radius = 0.5,
-            .material = .Metal,
-            .color = .{ .r = 0.8, .g = 0.6, .b = 0.2 },
-            .metal_fuzz = 1
         }
-        
-    };
+    );
+
+    try spheres.append(
+        Sphere {
+            .center = .{ .x = 0, .y = 1, .z = 0},
+            .radius = 1,
+            .material = .Dielectric,
+            .refraction_index = RefractionIndex.getVal(.Air),
+        }
+    );
+
+    try spheres.append(
+        Sphere {
+            .center = .{ .x = -4, .y = 1, .z = 0 },
+            .radius = 1,
+            .material = .Lambertian,
+            .color = .{ .r = 0.4, .g = 0.2, .b = 0.1 }
+        }
+    );
+
+
+    try spheres.append(
+        Sphere {
+            .center = .{ .x = 4, .y = 1, .z = 0 },
+            .radius = 1,
+            .material = .Metal,
+            .color = .{ .r = 0.7, .g = 0.6, .b = 0.5 },
+            .metal_fuzz = 0
+        }
+    );
 
     const spheres_buffer = try device.CreateBuffer(&.{
         .label = .fromSlice("spheres"),
         .usage = @intFromEnum(wgpu.BufferUsage.Storage) | @intFromEnum(wgpu.BufferUsage.CopyDst),
-        .size = @sizeOf(Sphere) * spheres_data.len,
+        .size = @sizeOf(Sphere) * spheres.items.len,
     });
     defer spheres_buffer.release();
     
 
     log.debug("position size = {}", .{@sizeOf(Position)});
 
-    //assert(@sizeOf(@TypeOf(spheres_data)) == spheres_buffer.getSize());
-    log.debug("using bitsize = {} bytes", .{@bitSizeOf(Sphere) * spheres_data.len / 8});
-
-    log.debug("alignment of Sphere = {}", .{@alignOf(Sphere)});
-    log.debug("alignment of spheres = {}", .{@alignOf(@TypeOf(spheres_data))});
-    log.debug("Size of one Sphere is {} bytes", .{@sizeOf(Sphere)});
-    log.debug("spheres_buffer size = {}", .{spheres_buffer.getSize()});
-
-    queue.WriteBuffer(spheres_buffer, 0, Sphere, &spheres_data);
+    queue.WriteBuffer(spheres_buffer, 0, Sphere, spheres.items[0..]);
 
     const sphere_len_buffer =  try device.CreateBuffer(&.{
         .label = .fromSlice("sphere len"),
@@ -296,7 +293,7 @@ pub fn main() !void {
 
     assert(@sizeOf(u32) == sphere_len_buffer.getSize());
 
-    queue.WriteBuffer(sphere_len_buffer, 0, u32, &.{ @intCast(spheres_data.len) });
+    queue.WriteBuffer(sphere_len_buffer, 0, u32, &.{ @intCast(spheres.items.len) });
 
     log.debug("sphere_len_buffer size = {}", .{sphere_len_buffer.getSize()});
 
