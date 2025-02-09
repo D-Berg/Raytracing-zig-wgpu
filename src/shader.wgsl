@@ -102,6 +102,7 @@ fn getRayColor(ray: Ray, seed: ptr<function, u32>) -> vec3f {
 
 }
 
+/// Causes the gpu to hang, probably not the smartest way to do it
 fn panic() {
     while(true) {
 
@@ -112,7 +113,8 @@ struct HitRecord {
     p: vec3f,
     normal: vec3f,
     t: f32,
-    front_face: bool
+    front_face: bool,
+    material: u32
 }
 
 fn hitWorld(ray: Ray, t_min: f32, t_max: f32, record: ptr<function, HitRecord>) -> bool {
@@ -140,14 +142,22 @@ fn hitWorld(ray: Ray, t_min: f32, t_max: f32, record: ptr<function, HitRecord>) 
 
 }
 
+struct Position {
+    x: f32,
+    y: f32,
+    z: f32
+}
+
 struct Sphere {
-    center: vec3f,
-    radius: f32
+    center: Position, // why no vec3f? it caused alignment problems since it has align of 16
+    radius: f32,
+    material: u32,
 }
 
 fn hitSphere(sphere: Sphere, ray: Ray, t_min: f32, t_max: f32, rec: ptr<function, HitRecord>) -> bool {
 
-    let oc = sphere.center - ray.orig;
+    let sphere_center = vec3f(sphere.center.x, sphere.center.y, sphere.center.z);
+    let oc = sphere_center - ray.orig;
 
     let a = pow(length(ray.dir), 2.0); // length squared
     let h = dot(ray.dir, oc);
@@ -174,8 +184,9 @@ fn hitSphere(sphere: Sphere, ray: Ray, t_min: f32, t_max: f32, rec: ptr<function
     (*rec).t = root;
     (*rec).p = rayAt(ray, (*rec).t);
 
-    let outward_normal = ((*rec).p - sphere.center) / sphere.radius;
+    let outward_normal = ((*rec).p - sphere_center) / sphere.radius;
     (*rec).front_face = dot(ray.dir, outward_normal) < 0.0;
+    (*rec).material = sphere.material;
 
     if (*rec).front_face {
         (*rec).normal = outward_normal;

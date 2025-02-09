@@ -8,6 +8,7 @@ const wgpu = zgl.wgpu;
 
 const shader_code = @embedFile("shader.wgsl");
 
+const assert = std.debug.assert;
 
 
 const ASPECT_RATIO: f32 = 16.0 / 9.0;
@@ -16,15 +17,15 @@ const WINDOW_WIDTH = 1080;
 const WINDOW_HEIGHT = @divTrunc(WINDOW_WIDTH, ASPECT_RATIO);
 
 // Packed: Fields remain in the order declared, least to most significant.
-const Position = packed struct { x: f32, y: f32, z: f32 };
+const Position = struct { x: f32, y: f32, z: f32 };
 
-const ViewPort = packed struct {
+const ViewPort = struct {
     width: f32,
     height: f32,
 };
 
-const Camera = packed struct {
-    center: Position,
+const Camera = struct {
+    center: struct { x: f32, y: f32, z: f32},
     focal_length: f32,
     view_port: ViewPort,
     samples_per_pixel: u32,
@@ -32,9 +33,14 @@ const Camera = packed struct {
 };
 
 
-const Sphere = packed struct {
+const Material = enum(u32) {
+    Metal = 0
+};
+
+const Sphere = struct {
     center: Position,
     radius: f32,
+    material: Material = .Metal,
 };
 
 pub fn main() !void {
@@ -217,20 +223,35 @@ pub fn main() !void {
     const spheres_buffer = try device.CreateBuffer(&.{
         .label = .fromSlice("spheres"),
         .usage = @intFromEnum(wgpu.BufferUsage.Storage) | @intFromEnum(wgpu.BufferUsage.CopyDst),
-        .size = @sizeOf(@TypeOf(spheres_data)),
+        .size = @sizeOf(Sphere) * spheres_data.len,
     });
     defer spheres_buffer.release();
+    
+
+    log.debug("position size = {}", .{@sizeOf(Position)});
+
+    //assert(@sizeOf(@TypeOf(spheres_data)) == spheres_buffer.getSize());
+    log.debug("using bitsize = {} bytes", .{@bitSizeOf(Sphere) * spheres_data.len / 8});
+
+    log.debug("alignment of Sphere = {}", .{@alignOf(Sphere)});
+    log.debug("alignment of spheres = {}", .{@alignOf(@TypeOf(spheres_data))});
+    log.debug("Size of one Sphere is {} bytes", .{@sizeOf(Sphere)});
+    log.debug("spheres_buffer size = {}", .{spheres_buffer.getSize()});
 
     queue.WriteBuffer(spheres_buffer, 0, Sphere, &spheres_data);
 
     const sphere_len_buffer =  try device.CreateBuffer(&.{
         .label = .fromSlice("sphere len"),
         .usage = @intFromEnum(wgpu.BufferUsage.Uniform) | @intFromEnum(wgpu.BufferUsage.CopyDst),
-        .size = @sizeOf(@TypeOf(spheres_data)),
+        .size = @sizeOf(u32),
     });
     defer sphere_len_buffer.release();
 
+    assert(@sizeOf(u32) == sphere_len_buffer.getSize());
+
     queue.WriteBuffer(sphere_len_buffer, 0, u32, &.{ @intCast(spheres_data.len) });
+
+    log.debug("sphere_len_buffer size = {}", .{sphere_len_buffer.getSize()});
 
     const bind_group = try device.CreateBindGroup(&.{
         .label = .fromSlice("bind group"),
