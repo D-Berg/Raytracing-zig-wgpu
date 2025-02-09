@@ -217,7 +217,7 @@ pub fn main() !void {
     });
     defer vertex_buffer.release();
 
-    if (os == .windows) vertex_buffer.unmap();
+    //if (os == .windows) vertex_buffer.unmap();
 
     queue.WriteBuffer(vertex_buffer, 0, f32, &vertex_data);
 
