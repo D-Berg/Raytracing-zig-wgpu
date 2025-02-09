@@ -83,8 +83,8 @@ pub fn main() !void {
         .look_from = .{ .x = 13, .z = 2, .y = 3 },
         .look_at = .{ .x = 0, .y = 0, .z = 0 },
         .vfov = 20,
-        .samples_per_pixel = 1,
-        .max_depth = 2,
+        .samples_per_pixel = 25,
+        .max_depth = 10,
         .defocus_angle = 0.6,
         .focus_dist = 10,
 
@@ -251,48 +251,49 @@ pub fn main() !void {
         }
     );
 
-    var a: i32 = -11;
-    while (a < 11) : (a += 1) {
-        var b: i32 = -11;
+    const min = -11;
+    const max = 11;
+    const n_small_balls = 20;
 
-        while (b < 11) : (b += 1) {
-            const choose_mat = random.float(f32);
+    for (0..n_small_balls) |_| {
+        const choose_mat = random.float(f32);
 
-            const center = Position{ 
-                .x = @as(f32, @floatFromInt(a)) + 0.9 * random.float(f32),
-                .y = 0.2,
-                .z = @as(f32, @floatFromInt(b)) + 0.9 * random.float(f32),
-            };
+        const a = min + (max - min) * random.float(f32);
+        const b = min + (max - min) * random.float(f32);
+        const center = Position{ 
+            .x = a + 0.9 * random.float(f32),
+            .y = 0.2,
+            .z = b + 0.9 * random.float(f32),
+        };
 
-            if (choose_mat < 0.8) {
-                //diffuse 
+        if (choose_mat < 0.8) {
+            //diffuse 
 
-                try spheres.append(
-                    Sphere {
-                        .center = center,
-                        .radius = 0.2,
-                        .material = .Lambertian,
-                        .color = .{
-                            .r = random.float(f32) * random.float(f32),
-                            .g = random.float(f32) * random.float(f32),
-                            .b = random.float(f32) * random.float(f32),
-                        }
-
+            try spheres.append(
+                Sphere {
+                    .center = center,
+                    .radius = 0.2,
+                    .material = .Lambertian,
+                    .color = .{
+                        .r = random.float(f32) * random.float(f32),
+                        .g = random.float(f32) * random.float(f32),
+                        .b = random.float(f32) * random.float(f32),
                     }
 
-                );
+                }
+
+            );
 
 
-            } 
+        } 
 
-            if (choose_mat < 0.95 and choose_mat >= 0.8) {
+        if (choose_mat < 0.95 and choose_mat >= 0.8) {
 
-            } else {
-
-            }
-
+        } else {
 
         }
+
+
 
 
     }
