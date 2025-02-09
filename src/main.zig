@@ -24,6 +24,27 @@ const ViewPort = struct {
     height: f32,
 };
 
+const RefractionIndex = enum {
+    Vacuum,
+    Air,
+    Water,
+    Glass,
+    Diamond,
+
+    inline fn getVal(kind: RefractionIndex) f32 {
+
+        return switch (kind) {
+            .Vacuum => 1.0,
+            .Air => 1.0003,
+            .Water => 1.33,
+            .Glass => 1.5,
+            .Diamond => 2.42,
+        };
+        
+
+    }
+};
+
 const Camera = struct {
     center: struct { x: f32, y: f32, z: f32},
     focal_length: f32,
@@ -60,7 +81,7 @@ pub fn main() !void {
             .height = v_height 
         },
         .samples_per_pixel = 5,
-        .max_depth = 10
+        .max_depth = 20
     };
 
     try glfw.init();
@@ -73,7 +94,7 @@ pub fn main() !void {
         camera.view_port.width, camera.view_port.height
     });
     const window = try glfw.Window.Create(WINDOW_WIDTH, WINDOW_HEIGHT, "Raytracing!");
-    defer  window.destroy();
+    defer window.destroy();
 
 
     const instance = try wgpu.CreateInstance(null);
@@ -215,23 +236,35 @@ pub fn main() !void {
     
 
     const spheres_data = [_]Sphere {
-        Sphere {
+        Sphere { // world
             .center = .{ .x = 0, .y = -100.5, .z = -1},
             .radius = 100,
             .color = .{ .r = 0.8, .g = 0.8, .b = 0.0 }
         },
-        Sphere { 
+        Sphere { // center diffuse
             .center = .{ .x = 0, .y = 0, .z = -1.2 }, 
+            .material = .Lambertian,
             .radius = 0.5,
             .color = .{ .r = 0.1, .g = 0.2, .b = 0.5}
         },
-        Sphere {
+
+        Sphere { // left glass
             .center = .{ .x = -1, .y = 0, .z = -1},
             .radius = 0.5,
             .material = .Dielectric,
-            .refraction_index = 1.0 / 1.33
+            .refraction_index = RefractionIndex.getVal(.Glass)
         },
-        Sphere {
+
+        Sphere { // left inner bubble
+            .center = .{ .x = -1, .y = 0, .z = -1},
+            .radius = 0.4,
+            .material = .Dielectric,
+            // ratio of the refractive index of the object divided by the refractive index of the enclosing medium
+            // meaning ball of air inside glass ball
+            .refraction_index = RefractionIndex.getVal(.Air) / RefractionIndex.getVal(.Glass),
+            //.color = .{ .r = 1, .g = 0,.b = 0 },
+        },
+        Sphere { // right metal
             .center = .{ .x = 1, .y = 0, .z = -1},
             .radius = 0.5,
             .material = .Metal,

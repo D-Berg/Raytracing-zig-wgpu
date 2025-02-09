@@ -99,6 +99,15 @@ fn refract(uv: vec3f, n: vec3f, etai_over_etat: f32) -> vec3f {
 
 }
 
+// Use Schlick's approximation for reflectance.
+fn reflectance(cosine: f32, ri: f32) -> f32 {
+
+    var r0 = (1.0 - ri) / (1.0 + ri);
+    r0 = r0 * r0;
+
+    return r0 + (1.0 - r0) * pow(1.0 - cosine, 5.0);
+}
+
 fn Vec3fFromColor(color: Color) -> vec3f {
     return vec3f(color.r, color.g, color.b);
 
@@ -150,21 +159,23 @@ fn scatter(
             var ri: f32;
                 
             if (*rec).front_face {
-                ri = 1.0 / (refraction_index);
+                ri = 1.0 / refraction_index;
             } else {
                 ri = refraction_index;
             }
 
             let unit_dir = normalize(ray.dir);
 
-            let cos_theta = min(-dot(-unit_dir, (*rec).normal), 1.0);
+            let cos_theta = min(dot(-unit_dir, (*rec).normal), 1.0);
             let sin_theta = sqrt(1.0 - cos_theta * cos_theta);
 
             let cannot_refract = ri * sin_theta > 1.0;
 
             var dir: vec3f;
 
-            if cannot_refract {
+            let can_reflect = reflectance(cos_theta, ri) > random(seed);
+
+            if cannot_refract || can_reflect {
                 dir = reflect(unit_dir, (*rec).normal);
             } else {
                 dir = refract(unit_dir, (*rec).normal, ri);
@@ -203,9 +214,12 @@ fn getRayColor(ray: Ray, seed: ptr<function, u32>) -> vec3f {
             if scatter(r, &rec, &attenuation, &scattered, seed) {
                 color *= attenuation;
                 r = scattered;
-            } 
+            } else {
+                break;
+            }
 
            // return 0.5 * (rec.normal + 1.0); // fine colored sphere, chapter 6
+
 
             
 
@@ -255,7 +269,7 @@ fn hitWorld(ray: Ray, t_min: f32, t_max: f32, record: ptr<function, HitRecord>) 
     for (var i: u32 = 0; i < spheres_len; i++) {
         let sphere = spheres[i];
 
-        if hitSphere(sphere, ray, t_min, t_max, &temp_rec) {
+        if hitSphere(sphere, ray, t_min, closest, &temp_rec) {
             hit_anything = true;
             closest = temp_rec.t;
             (*record) = temp_rec;
@@ -307,7 +321,7 @@ fn hitSphere(sphere: Sphere, ray: Ray, t_min: f32, t_max: f32, rec: ptr<function
     let sqrt_discr = sqrt(discriminant);
 
     var root = (h - sqrt_discr) / a;
-    if root <= t_min || t_max < root {
+    if root <= t_min || t_max <= root {
         root = (h + sqrt_discr) / a;
 
         if root <= t_min || t_max <= root{
@@ -328,7 +342,7 @@ fn hitSphere(sphere: Sphere, ray: Ray, t_min: f32, t_max: f32, rec: ptr<function
     if (*rec).front_face {
         (*rec).normal = outward_normal;
     } else {
-        (*rec).normal = -1.0 * outward_normal;
+        (*rec).normal = -outward_normal;
     }
 
     return true;
@@ -357,6 +371,7 @@ fn rand_lcg(seed: u32) -> u32 {
 
 }
 
+/// return f32 in [0, 1)
 fn random(seed: ptr<function, u32>) -> f32 {
     (*seed) = rand_lcg((*seed));
 
