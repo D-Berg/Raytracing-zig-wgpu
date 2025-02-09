@@ -227,7 +227,7 @@ pub fn main() !void {
     });
     defer window_uniform_buffer.release();
 
-    if (os == .windows) vertex_buffer.unmap();
+    if (os == .windows) window_uniform_buffer.unmap();
 
     queue.WriteBuffer(window_uniform_buffer, 0, f32, &.{ WINDOW_WIDTH, WINDOW_HEIGHT });
 
