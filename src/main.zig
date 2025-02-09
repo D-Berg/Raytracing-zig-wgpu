@@ -247,7 +247,7 @@ pub fn main() !void {
     try spheres.append(Sphere { // world
             .center = .{ .x = 0, .y = -1000, .z = 0},
             .radius = 1000,
-            .color = .{ .r = 0.8, .g = 0.8, .b = 0.0 }
+            .color = .{ .r = 0.5, .g = 0.5, .b = 0.5 }
         }
     );
 
