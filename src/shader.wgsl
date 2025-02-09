@@ -6,6 +6,9 @@
 
 const inf: f32 = 3.4028235e+38;
 
+const MATERIAL_LAMBERTIAN: u32 = 0;
+const MATERIAL_METAL: u32 = 1;
+
 struct Camera {
     center: vec3f,
     focal_length: f32,
@@ -69,6 +72,71 @@ fn rayAt(ray: Ray, t: f32) -> vec3f {
     return ray.orig + t * ray.dir;
 }
 
+
+fn nearZero(v: vec3f) -> bool {
+    let s = f32(1e-8);
+
+    return abs(v.x) < s && abs(v.y) < s && abs(v.z) < s;
+}
+
+fn reflect(v: vec3f, n: vec3f) -> vec3f {
+    return v - 2.0 * dot(v, n) * n;
+}
+
+fn Vec3fFromColor(color: Color) -> vec3f {
+    return vec3f(color.r, color.g, color.b);
+
+}
+
+fn scatter(
+    ray: Ray, 
+    rec: ptr<function, HitRecord>, 
+    attenuation: ptr<function, vec3f>, 
+    scattered: ptr<function, Ray>, 
+    seed: ptr<function, u32>
+) -> bool {
+
+    switch (*rec).material {
+
+        case MATERIAL_LAMBERTIAN: {
+            let albedo = Vec3fFromColor((*rec).material_color);
+            var scatter_dir = (*rec).normal + RandomUnitVec3f(seed);
+
+            if nearZero(scatter_dir) {
+                scatter_dir = (*rec).normal;
+            }
+        
+            (*scattered) = Ray((*rec).p, scatter_dir);
+            (*attenuation) = albedo;
+
+            return true;
+        }
+        case MATERIAL_METAL: {
+
+            let albedo = Vec3fFromColor((*rec).material_color);
+            var reflected = reflect(ray.dir, (*rec).normal);
+
+            let fuzz = (*rec).fuzz;
+            reflected = normalize(reflected) + (fuzz * RandomUnitVec3f(seed));
+
+                
+            (*scattered) = Ray((*rec).p, reflected);
+            
+            (*attenuation) = albedo;
+
+            return true;
+        }
+        
+        default: {
+            //panic(); 
+            return false;
+        }
+
+    }
+
+
+}
+
 fn getRayColor(ray: Ray, seed: ptr<function, u32>) -> vec3f {
 
     var color = vec3f(1, 1, 1);
@@ -79,11 +147,17 @@ fn getRayColor(ray: Ray, seed: ptr<function, u32>) -> vec3f {
         var rec: HitRecord;
 
         if hitWorld(r, 0.0001, inf, &rec) {
+            var scattered: Ray;
+            var attenuation: vec3f;
 
-            let direction = rec.normal + RandomUnitVec3f(seed);
-            r = Ray(rec.p, direction);
-            //return 0.5 * (rec.normal + 1.0);
-            color *= 0.1;
+            if scatter(r, &rec, &attenuation, &scattered, seed) {
+                color *= attenuation;
+                r = scattered;
+            } 
+
+           // return 0.5 * (rec.normal + 1.0); // fine colored sphere, chapter 6
+
+            
 
         } else {
 
@@ -112,7 +186,9 @@ struct HitRecord {
     normal: vec3f,
     t: f32,
     front_face: bool,
-    material: u32
+    material: u32,
+    material_color: Color,
+    fuzz: f32
 }
 
 fn hitWorld(ray: Ray, t_min: f32, t_max: f32, record: ptr<function, HitRecord>) -> bool {
@@ -146,10 +222,18 @@ struct Position {
     z: f32
 }
 
+struct Color {
+    r: f32,
+    g: f32,
+    b: f32
+}
+
 struct Sphere {
     center: Position, // why no vec3f? it caused alignment problems since it has align of 16
     radius: f32,
     material: u32,
+    color: Color,
+    fuzz: f32,
 }
 
 fn hitSphere(sphere: Sphere, ray: Ray, t_min: f32, t_max: f32, rec: ptr<function, HitRecord>) -> bool {
@@ -185,6 +269,8 @@ fn hitSphere(sphere: Sphere, ray: Ray, t_min: f32, t_max: f32, rec: ptr<function
     let outward_normal = ((*rec).p - sphere_center) / sphere.radius;
     (*rec).front_face = dot(ray.dir, outward_normal) < 0.0;
     (*rec).material = sphere.material;
+    (*rec).material_color = sphere.color;
+    (*rec).fuzz = sphere.fuzz;
 
     if (*rec).front_face {
         (*rec).normal = outward_normal;

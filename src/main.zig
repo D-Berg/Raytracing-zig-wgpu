@@ -34,13 +34,16 @@ const Camera = struct {
 
 
 const Material = enum(u32) {
-    Metal = 0
+    Lambertian = 0,
+    Metal = 1, 
 };
 
 const Sphere = struct {
     center: Position,
     radius: f32,
-    material: Material = .Metal,
+    material: Material = .Lambertian,
+    color: struct { r: f32, g: f32, b: f32 },
+    metal_fuzz: f32 = 0,
 };
 
 pub fn main() !void {
@@ -54,8 +57,8 @@ pub fn main() !void {
             .width = v_width, 
             .height = v_height 
         },
-        .samples_per_pixel = 10,
-        .max_depth = 20
+        .samples_per_pixel = 5,
+        .max_depth = 10
     };
 
     try glfw.init();
@@ -92,7 +95,7 @@ pub fn main() !void {
         .width = WINDOW_WIDTH,
         .height = WINDOW_HEIGHT,
         .usage = .RenderAttachment,
-        .presentMode = .Fifo,
+        .presentMode = .Immediate,
     };
 
     surface.configure(&surface_conf);
@@ -212,12 +215,28 @@ pub fn main() !void {
     const spheres_data = [_]Sphere {
         Sphere {
             .center = .{ .x = 0, .y = -100.5, .z = -1},
-            .radius = 100
+            .radius = 100,
+            .color = .{ .r = 0.8, .g = 0.8, .b = 0.0 }
         },
         Sphere { 
-            .center = .{ .x = 0, .y = 0, .z = -1 }, 
-            .radius = 0.5
+            .center = .{ .x = 0, .y = 0, .z = -1.2 }, 
+            .radius = 0.5,
+            .color = .{ .r = 0.1, .g = 0.2, .b = 0.5}
         },
+        Sphere {
+            .center = .{ .x = -1, .y = 0, .z = -1},
+            .radius = 0.5,
+            .material = .Metal,
+            .color = .{ .r = 0.8, .g = 0.8, .b = 0.8 },
+            .metal_fuzz = 0.3
+        },
+        Sphere {
+            .center = .{ .x = 1, .y = 0, .z = -1},
+            .radius = 0.5,
+            .material = .Metal,
+            .color = .{ .r = 0.8, .g = 0.6, .b = 0.2 },
+            .metal_fuzz = 1
+        }
     };
 
     const spheres_buffer = try device.CreateBuffer(&.{
