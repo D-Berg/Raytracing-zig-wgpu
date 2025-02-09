@@ -27,14 +27,6 @@ struct Ray {
     dir: vec3f
 }
 
-//fn RandomVec3f(seed: u32, min: f32, max: f32) -> vec3f {
-//    return vec3f(
-//        randomInRange(seed + 1, min, max),
-//        randomInRange(seed + 2, min, max),
-//        randomInRange(seed + 3, min, max)
-//    );
-//}
-
 const pi: f32= 3.14159265358979323846264338327950288419716939937510;
 
 // https://en.wikipedia.org/wiki/Box%E2%80%93Muller_transform
@@ -53,12 +45,18 @@ fn gaussian(seed: ptr<function, u32>) -> vec2f {
 // solution in source absolutely killed performance
 // one can generate point on unit sphere by sampling 3 gaussian random variables.
 // https://mathworld.wolfram.com/SpherePointPicking.html
-fn RandomVec3fOnHemisphere(normal: vec3f, seed: ptr<function, u32>) -> vec3f {
+fn RandomUnitVec3f(seed: ptr<function, u32>) -> vec3f {
     let xy = gaussian(seed);
     let z = gaussian(seed).y;
 
     let rand_vec = normalize(vec3f(xy, z));
 
+    return rand_vec;
+
+}
+
+fn RandomVec3fOnHemisphere(normal: vec3f, seed: ptr<function, u32>) -> vec3f {
+    let rand_vec = RandomUnitVec3f(seed);
     // ensure its in right hemisphere
     if dot(rand_vec, normal) < 0.0 {
         return rand_vec;
@@ -82,7 +80,7 @@ fn getRayColor(ray: Ray, seed: ptr<function, u32>) -> vec3f {
 
         if hitWorld(r, 0.0001, inf, &rec) {
 
-            let direction = rec.normal + RandomVec3fOnHemisphere(rec.normal, seed);
+            let direction = rec.normal + RandomUnitVec3f(seed);
             r = Ray(rec.p, direction);
             //return 0.5 * (rec.normal + 1.0);
             color *= 0.1;
