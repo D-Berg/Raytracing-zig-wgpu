@@ -12,7 +12,11 @@ const builtin = @import("builtin");
 const os = builtin.os.tag;
 
 const assert = std.debug.assert;
-const random = std.crypto.random;
+
+// change seed to get different image or use crypto random
+// const random = std.crypto.random;
+var prng = std.Random.DefaultPrng.init(3989);
+var random = prng.random();
 
 
 const ASPECT_RATIO: f32 = 16.0 / 9.0;
@@ -83,7 +87,7 @@ pub fn main() !void {
         .look_from = .{ .x = 13, .z = 2, .y = 3 },
         .look_at = .{ .x = 0, .y = 0, .z = 0 },
         .vfov = 20,
-        .samples_per_pixel = 25,
+        .samples_per_pixel = 5,
         .max_depth = 10,
         .defocus_angle = 0.6,
         .focus_dist = 10,
@@ -266,7 +270,7 @@ pub fn main() !void {
             .z = b + 0.9 * random.float(f32),
         };
 
-        if (choose_mat < 0.8) {
+        if (choose_mat < 0.7) {
             //diffuse 
 
             try spheres.append(
@@ -287,9 +291,39 @@ pub fn main() !void {
 
         } 
 
-        if (choose_mat < 0.95 and choose_mat >= 0.8) {
+        if (choose_mat < 0.95 and choose_mat >= 0.7) {
+            //metal
+            //
+            try spheres.append(
+                Sphere {
+                    .center = center,
+                    .radius = 0.2,
+                    .material = .Metal,
+                    .color = .{
+                        .r = 0.5 + (0.5) * random.float(f32),
+                        .g = 0.5 + (0.5) * random.float(f32),
+                        .b = 0.5 + (0.5) * random.float(f32),
+                    },
+                    .metal_fuzz = random.float(f32),
+
+                }
+            );
 
         } else {
+            try spheres.append(
+                Sphere {
+                    .center = center,
+                    .radius = 0.2,
+                    .material = .Metal,
+                    .color = .{
+                        .r = 0.5 + (0.5) * random.float(f32),
+                        .g = 0.5 + (0.5) * random.float(f32),
+                        .b = 0.5 + (0.5) * random.float(f32),
+                    },
+                    .metal_fuzz = random.float(f32),
+
+                }
+            );
 
         }
 
