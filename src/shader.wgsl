@@ -216,7 +216,7 @@ fn getRayColor(ray: ptr<function, Ray>, seed: ptr<function, u32>) -> vec3f {
 
         var rec: HitRecord;
 
-        if hitWorld(ray, 0.0001, inf, &rec) {
+        if hitWorld(ray, 0.0001, 500, &rec) {
             var scattered: Ray;
             var attenuation: vec3f;
 

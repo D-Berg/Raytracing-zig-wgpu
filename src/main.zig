@@ -21,6 +21,7 @@ var random = prng.random();
 
 const ASPECT_RATIO: f32 = 16.0 / 9.0;
 
+const RENDER_FACTOR = 1.0 / 4.0;
 const WINDOW_WIDTH = 1200;
 const WINDOW_HEIGHT = @divTrunc(WINDOW_WIDTH, ASPECT_RATIO);
 
@@ -87,7 +88,7 @@ pub fn main() !void {
         .look_from = .{ .x = 13, .z = 2, .y = 3 },
         .look_at = .{ .x = 0, .y = 0, .z = 0 },
         .vfov = 20,
-        .samples_per_pixel = 5,
+        .samples_per_pixel = 50,
         .max_depth = 10,
         .defocus_angle = 0.6,
         .focus_dist = 10,
@@ -122,8 +123,8 @@ pub fn main() !void {
     const surface_conf = wgpu.SurfaceConfiguration {
         .device = device,
         .format = format,
-        .width = WINDOW_WIDTH,
-        .height = WINDOW_HEIGHT,
+        .width = @round(RENDER_FACTOR * WINDOW_WIDTH),
+        .height = @round(RENDER_FACTOR * WINDOW_HEIGHT),
         .usage = .RenderAttachment,
         .presentMode = .Immediate,
     };
@@ -234,7 +235,10 @@ pub fn main() !void {
 
     if (os == .windows) window_uniform_buffer.unmap();
 
-    queue.WriteBuffer(window_uniform_buffer, 0, f32, &.{ WINDOW_WIDTH, WINDOW_HEIGHT });
+    queue.WriteBuffer(window_uniform_buffer, 0, f32, &.{ 
+        RENDER_FACTOR * WINDOW_WIDTH, 
+        RENDER_FACTOR * WINDOW_HEIGHT 
+    });
 
     const camera_uniform_buffer = try device.CreateBuffer(&.{
         .label = .fromSlice("camera"),
