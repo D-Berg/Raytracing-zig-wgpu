@@ -21,7 +21,7 @@ var random = prng.random();
 
 const ASPECT_RATIO: f32 = 16.0 / 9.0;
 
-const RENDER_FACTOR = 1.0 / 4.0;
+const RENDER_FACTOR = 1.0 / 8.0;
 const WINDOW_WIDTH = 1200;
 const WINDOW_HEIGHT = @divTrunc(WINDOW_WIDTH, ASPECT_RATIO);
 
@@ -77,6 +77,49 @@ const Sphere = struct {
     refraction_index: f32 = 0
 };
 
+
+const Options = struct {
+    samples_per_pixel: ?u32 = null,
+    max_depth: ?u32 = null,
+};
+
+fn parseArgs(args: [][:0]u8) !Options {
+
+    var options = Options {};
+
+    for (args[1..]) |arg| {
+
+        const samples_str = "samples=";
+        if (std.mem.indexOf(u8, arg, samples_str)) |idx| {
+            const start = idx + samples_str.len;
+
+            if (start < arg.len) {
+                const num_samples_str = arg[start..];
+
+                options.samples_per_pixel = try std.fmt.parseInt(u32, num_samples_str, 10);
+            }
+
+        }
+
+        const depth_str = "max_depth=";
+        if (std.mem.indexOf(u8, arg, depth_str)) |idx| {
+            const start = idx + depth_str.len;
+            if (start < arg.len) {
+
+                const num_depth_str = arg[start..];
+
+                options.max_depth = try std.fmt.parseInt(u32, num_depth_str, 10);
+
+            }
+        }
+    }
+
+
+    return options;
+
+
+}
+
 pub fn main() !void {
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}).init;
@@ -84,12 +127,20 @@ pub fn main() !void {
 
     const allocator = gpa.allocator();
 
+    const args = try std.process.argsAlloc(allocator);
+    defer std.process.argsFree(allocator, args);
+
+    const options = try parseArgs(args);
+
+    log.debug("options = {}", .{options});
+
+
     const camera = Camera {
         .look_from = .{ .x = 13, .z = 2, .y = 3 },
         .look_at = .{ .x = 0, .y = 0, .z = 0 },
         .vfov = 20,
-        .samples_per_pixel = 50,
-        .max_depth = 10,
+        .samples_per_pixel = options.samples_per_pixel orelse 10,
+        .max_depth = options.max_depth orelse 10,
         .defocus_angle = 0.6,
         .focus_dist = 10,
 
